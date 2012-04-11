@@ -12,12 +12,6 @@ enum command_type
     SUBSHELL_COMMAND,    // ( A )
   };
 
-struct command_stream
-{
-	struct command_stream* next;
-	struct command my_command;
-};
-
 // Data associated with a command.
 struct command
 {
@@ -41,4 +35,11 @@ struct command
     // for SUBSHELL_COMMAND:
     struct command *subshell_command;
   } u;
+};
+
+struct command_stream
+{
+	struct command_stream* next;
+	struct command_stream* previous;
+	struct command my_command;
 };

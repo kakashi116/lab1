@@ -7,9 +7,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-bool isWord(char *a){
-  return isalnum(a)||a=='!'||a=='%'||a=='+'||a==','||a=='-'
+#define true 1
+#define false 0
+typedef char bool;
+
+bool isWord(char a){
+  return isalnum((int)a )||a=='!'||a=='%'||a=='+'||a==','||a=='-'
          ||a=='.'||a=='/'||a==':'||a=='@'||a=='^'||a=='_';
 }
 //checks the next byte in the buffer without popping off the byte.
@@ -32,10 +37,10 @@ void pop(int (*get_next_byte) (void *),
 void skipST(int (*get_next_byte) (void *),
 	  void *get_next_byte_argument, char *n)
 {
-  while(n==' '||n=='\t')
+  while(*n==' '|| *n=='\t')
   {
-    pop(get_next_byte, get_next_byte_argument,*n);
-    next(get_next_byte, get_next_byte_argument,*n);
+    pop(get_next_byte, get_next_byte_argument,n);
+    next(get_next_byte, get_next_byte_argument,n);
   }
 }
 //if next is word, use getWord to parse word until next is not a word.
@@ -62,14 +67,14 @@ struct token{
 
 void create_token(char *token, struct token *head, struct token *current)
 {
-  struct *token new = checked_malloc(sizeof(struct token));
-  new->data=token;
-  new->ptr=NULL;
+  struct token *new1 = (struct token*)checked_malloc(sizeof(struct token));
+  new1->data=token;
+  new1->ptr=NULL;
   if(head==NULL)
-    head=new;
+    head=new1;
   else
-    current->ptr=new;
-  current=new;
+    current->ptr=new1;
+  current=new1;
 }
 command_stream_t
 make_command_stream (int (*get_next_byte) (void *),
@@ -79,44 +84,44 @@ make_command_stream (int (*get_next_byte) (void *),
      add auxiliary functions and otherwise modify the source code.
      You can also use external functions defined in the GNU C Library.  */
   char n;
-  next(get_next_byte, get_next_byte_argument, *n);
-  skipST(get_next_byte,get_next_byte_argument);
+  next(get_next_byte, get_next_byte_argument, &n);
+  skipST(get_next_byte,get_next_byte_argument,&n);
   int line = 1;
-  struct *token head = NULL, current = NULL;
+  struct token *head = NULL, *current = NULL;
   while(n!=EOF)
   {
     if(isWord(n))
     {
-      create_token(getWord(get_next_byte,get_next_byte_argument,*n), head, current);
+      create_token(getWord(get_next_byte,get_next_byte_argument,&n), head, current);
     }
     else
       switch(n){
 	case '(':
 	  create_token("(", head, current);
-	  pop(get_next_byte, get_next_byte_argument, *n);
+	  pop(get_next_byte, get_next_byte_argument, &n);
 	  break;
 	case ')':
 	  create_token(")", head, current);
-	  pop(get_next_byte, get_next_byte_argument, *n);
+	  pop(get_next_byte, get_next_byte_argument, &n);
 	  break;
 	case '<':
 	  create_token("<", head, current);
-	  pop(get_next_byte, get_next_byte_argument, *n);
+	  pop(get_next_byte, get_next_byte_argument, &n);
 	  break;
 	case '>':
 	  create_token(">", head, current);
-	  pop(get_next_byte, get_next_byte_argument, *n);
+	  pop(get_next_byte, get_next_byte_argument, &n);
 	  break;
 	case ';':
 	  create_token(";", head, current);
-	  pop(get_next_byte, get_next_byte_argument, *n);
+	  pop(get_next_byte, get_next_byte_argument, &n);
 	  break;
 	case '|':
-	  pop(get_next_byte, get_next_byte_argument, *n);
-	  if(next(get_next_byte,get_next_byte_argument)=='|')
+	  pop(get_next_byte, get_next_byte_argument, &n);
+	  if(next(get_next_byte,get_next_byte_argument, &n)=='|')
 	  {
 	    create_token("||", head, current);
-	    pop(get_next_byte,get_next_byte_argument,*n);
+	    pop(get_next_byte,get_next_byte_argument,&n);
 	  }
 	  else
 	    create_token("|", head, current);
@@ -129,18 +134,23 @@ make_command_stream (int (*get_next_byte) (void *),
 	  }
 	  else
 	  {
-	    error(1,0,"error in line%n\n", line)
+	    error(1,0,"error in line%n\n", line);
 	  }  
-	case '\n'
+	case '\n':
 	  create_token("\n",head,current);
 	  break;
 	default:
-	  error(1,0,"error in line %n\n", line)
+	  error(1,0,"error in line %n\n", line);
       }
-  next(get_next_byte,get_next_byte_argument,*n);
-  skipST(get_next_byte,get_next_byte_argument);
+  next(get_next_byte,get_next_byte_argument,&n);
+  skipST(get_next_byte,get_next_byte_argument, &n);
   }
-
+  current=head;
+  while(current!= NULL)
+  {
+	  printf("%s",current->data);
+	  current=current->ptr;
+  }
   //delete token stream
   current=head;
   while(head->ptr!=NULL)
@@ -166,9 +176,21 @@ read_command_stream (command_stream_t s)
 	while (s != NULL) {
 		command_stream_t current = s;
 		s = s->next;
+		
+		// free the previous node
+		if (current->previous != NULL) {
+			free(current->previous->my_command);
+			free(current->previous);
+		}
+
 		return current->my_command;
 	}
 
+	// free the last node
+	if (s->previous != NULL) {
+		free(s->previous->my_command);
+		free(s->previous);
+	}
 	return 0;
 }
 

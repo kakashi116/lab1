@@ -85,11 +85,11 @@ make_command_stream (int (*get_next_byte) (void *),
   struct *token head = NULL, current = NULL;
   while(n!=EOF)
   {
-    if(isWord(n))
-    {
-      create_token(getWord(get_next_byte,get_next_byte_argument,*n), head, current);
-    }
-    else
+      if(isWord(n))
+      {
+        create_token(getWord(get_next_byte,get_next_byte_argument,*n), head, current);
+      }
+      else
       switch(n){
 	case '(':
 	  create_token("(", head, current);

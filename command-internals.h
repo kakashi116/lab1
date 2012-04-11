@@ -41,5 +41,5 @@ struct command_stream
 {
 	struct command_stream* next;
 	struct command_stream* previous;
-	struct command my_command;
+	struct command* my_command;
 };

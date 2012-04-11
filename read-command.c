@@ -57,6 +57,7 @@ void getWord(int (*get_next_byte) (void *),
     next(get_next_byte,get_next_byte_argument,n);
   }
   buf[i]='\0';
+  temp=(char*)checked_malloc(sizeof(char)*strlen(buf));
   strcpy(temp,buf);
 }
 
@@ -87,7 +88,7 @@ make_command_stream (int (*get_next_byte) (void *),
   next(get_next_byte, get_next_byte_argument, &n);
   skipST(get_next_byte,get_next_byte_argument,&n);
   int line = 1;
-  char *temp;
+  char *temp=NULL;
   struct token *head = NULL, *current = NULL;
   while(n!=EOF)
   {
@@ -162,6 +163,8 @@ make_command_stream (int (*get_next_byte) (void *),
     head=current;
   }
   free(head);
+  command_stream_t ok = NULL;
+  return ok;
 }
 
 void expect(char expectChar, char currentChar, int* i, int* commandLen) {

@@ -9,19 +9,19 @@
 #include <string.h>
 #include <ctype.h>
 
-#define true 1
-#define false 0
-typedef char bool;
-
-bool isWord(char a){
-  return isalnum((int)a )||a=='!'||a=='%'||a=='+'||a==','||a=='-'
-         ||a=='.'||a=='/'||a==':'||a=='@'||a=='^'||a=='_';
+int isWord(char a){
+  if(isalnum((int)a ))
+	return 1;
+  if(a=='!'||a=='%'||a=='+'||a==','||a=='-'
+         ||a=='.'||a=='/'||a==':'||a=='@'||a=='^'||a=='_')
+        return 1;
+  return 0;
 }
 //checks the next byte in the buffer without popping off the byte.
 char next(int (*get_next_byte) (void *),
 	  void *get_next_byte_argument, char *n)
 {
-  if(*n==NULL) 
+  if(n==NULL) 
     *n = get_next_byte(get_next_byte_argument);
   return *n;
 }
@@ -29,9 +29,9 @@ char next(int (*get_next_byte) (void *),
 void pop(int (*get_next_byte) (void *),
 	  void *get_next_byte_argument, char *n)
 {
-  if (*n==NULL)
+  if (n==NULL)
     get_next_byte(get_next_byte_argument);
-  *n=NULL;
+  n=NULL;
 }
 //skips all spaces and tabs if n=space or tab. returns with n=next
 void skipST(int (*get_next_byte) (void *),
@@ -44,8 +44,8 @@ void skipST(int (*get_next_byte) (void *),
   }
 }
 //if next is word, use getWord to parse word until next is not a word.
-char* getWord(int (*get_next_byte) (void *),
-	  void *get_next_byte_argument, char *n)
+void getWord(int (*get_next_byte) (void *),
+	  void *get_next_byte_argument, char *n, char *temp)
 {
   char buf[256];
   int i =0;
@@ -53,11 +53,11 @@ char* getWord(int (*get_next_byte) (void *),
   {
     buf[i]=*n;
     i++;
-    pop(get_next_byte,get_next_byte_argument,*n);
-    next(get_next_byte,get_next_byte_argument,*n);
+    pop(get_next_byte,get_next_byte_argument,n);
+    next(get_next_byte,get_next_byte_argument,n);
   }
   buf[i]='\0';
-  return buf;
+  strcpy(temp,buf);
 }
 
 struct token{
@@ -87,12 +87,14 @@ make_command_stream (int (*get_next_byte) (void *),
   next(get_next_byte, get_next_byte_argument, &n);
   skipST(get_next_byte,get_next_byte_argument,&n);
   int line = 1;
+  char *temp;
   struct token *head = NULL, *current = NULL;
   while(n!=EOF)
   {
     if(isWord(n))
     {
-      create_token(getWord(get_next_byte,get_next_byte_argument,&n), head, current);
+      getWord(get_next_byte,get_next_byte_argument,&n, temp);
+      create_token(temp, head, current);
     }
     else
       switch(n){
@@ -134,13 +136,13 @@ make_command_stream (int (*get_next_byte) (void *),
 	  }
 	  else
 	  {
-	    error(1,0,"error in line%n\n", line);
+	    error(1,0,"error in line%d\n", line);
 	  }  
 	case '\n':
 	  create_token("\n",head,current);
 	  break;
 	default:
-	  error(1,0,"error in line %n\n", line);
+	  error(1,0,"error in line %d\n", line);
       }
   next(get_next_byte,get_next_byte_argument,&n);
   skipST(get_next_byte,get_next_byte_argument, &n);

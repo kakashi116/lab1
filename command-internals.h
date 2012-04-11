@@ -14,9 +14,8 @@ enum command_type
 
 struct command_stream
 {
-	char *token;
 	struct command_stream* next;
-	int startFromLine;
+	struct command my_command;
 };
 
 // Data associated with a command.

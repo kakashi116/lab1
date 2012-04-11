@@ -1,0 +1,12 @@
+Debug/
+ipch/
+.settings/
+*.o
+*.sdf
+*.sln
+*.opensdf
+*.vcxproj
+*.vcxproj.*
+.project
+.cproject
+*.suo

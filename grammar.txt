@@ -1,0 +1,2 @@
+TREE -> WORD # LS TREE RS # WORD TOKEN TREE # LS TREE RS TOKEN TREE
+TOKEN -> && # ; # || # | # < # >

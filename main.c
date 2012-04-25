@@ -55,17 +55,15 @@ main (int argc, char **argv)
 
   command_t last_command = NULL;
   command_t command;
-  int i = 1;
 
   /* TODO: how to modify command_stream? */
   /* Force to run once for testing at this time */
-  while (i != 0 && (command = read_command_stream (command_stream)))
+  while ( (command = read_command_stream (&command_stream)) )
   {
     if (print_tree)
 	{
 	  printf ("# %d\n", command_number++);
 	  print_command (command);
-	  --i;
 	}
       else
 	{

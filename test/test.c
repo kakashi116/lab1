@@ -2,12 +2,22 @@
 #include<stdio.h>
 
 struct list_el {
-   char *word;
+   char* word;
 };
 
+void change(struct list_el **st) 
+{
+	(*st)->word = "2";
+}
+
+
 int main(){
-	char *buffer = malloc(sizeof(char));
-	buffer[0] = '1';
-	struct list_el test;
-	test->word = buffer;
+	struct list_el *test = malloc(sizeof(struct list_el));
+	test->word = "1";
+	change(&test);
+	if (test == NULL) {
+		puts("fail");
+		exit(1);
+	}
+	puts(test->word);
 }

@@ -52,7 +52,7 @@ void getWord(int(*get_next_byte)(void *), void *get_next_byte_argument,
 
 struct token {
 	char* data;
-	struct token *ptr;
+	struct token *next; // next
 	int isWord; // 1 if it's a word, 0 otherwise
 };
 
@@ -61,77 +61,114 @@ void create_token(char *token, struct token **head, struct token **current, int 
 	new1->data = (char*) (checked_malloc(sizeof(char) * strlen(token)));
 	new1->isWord = isWord;
 	strcpy(new1->data, token);
-	new1->ptr = NULL;
+	new1->next = NULL;
 	if (*head == NULL)
 		*head = new1;
 	else
-		(*current)->ptr = new1;
+		(*current)->next = new1;
 	*current = new1;
 }
 
-void read_word(command_t command, struct token *current) {
+command_t build_single_command(struct token **current) {
+	command_t command = checked_malloc(sizeof(struct command));
 	command->type = SIMPLE_COMMAND;
 	command->status = -1;
 	char** w = checked_malloc(sizeof(char*) + 1);
-	w[0] = current->data;
+	w[0] = (*current)->data;
 	w[1] = NULL;
 	command->u.command[0] = NULL;
 	command->u.command[1] = NULL;
 	command->u.word = w;
+	return command;
 }
-/*
-command_t left_associative(command_t a, command_t b) {
-	if (a->type == SIMPLE_COMMAND || a->type == SUB_SHELL)
-		return build_command(a, b);
-	else
 
-}
-*/
 
 command_t build_command(enum command_type type, command_t a, command_t b) {
   command_t temp = checked_malloc(sizeof(struct command));
   temp->type = type;
   temp->status = -1;
-  temp->u.command[0] = a;
-  temp->u.command[1] = b;
-  
+  if (type == SUBSHELL_COMMAND){
+	  temp->u.subshell_command = a;
+  } else {
+	  temp->u.command[0] = a;
+	  temp->u.command[1] = b;
+  }
   return temp;
 }
 
 
-command_t make_tree(struct token *current, struct token *head) {
-	command_t first = checked_malloc(sizeof(struct command));
+command_t left_associative(enum command_type type, command_t a, command_t b) {
+	// in a sub shell command, the second argument 'b' is always set to NULL
+	if (b == NULL || b->type == SUBSHELL_COMMAND || b->type == SIMPLE_COMMAND)
+		return build_command(type, a, b);
+	else {
+		return build_command(b->type, left_associative(type, a, b->u.command[0]), b->u.command[1]);
+	}
+}
 
-	if (current->isWord) {
-		read_word(first, current);
-		current = current->ptr;
-		if (current == NULL) {
 
+command_t make_tree(struct token **current) {
+	command_t first;
+	char *input = NULL;
+	char *output = NULL;
+	
+	if ((*current)->isWord) {
+		// detect I/O
+		if ((*current)->next != NULL && !strcmp((*current)->next->data, "<")) { // input
+			input = (*current)->data;
+			*current = (*current)->next->next; // skip 2 tokens [input] [>]
+			first = make_tree(current);
+			first->input = input;
+		} else {
+			first = build_single_command(current);
+			*current = (*current)->next;
+		}
+		
+		if (*current == NULL || !strcmp((*current)->data, ")")) {
 			return first;
-		} /*else if (!strcmp(current->data, "<")) { // input
-
-		}*/
+		}
 	}
 
 	command_t second = checked_malloc(sizeof(struct command));
 	enum command_type type;
 
-	if (current->isWord == 0){
-		if (!strcmp(current->data, "&&"))
-				type = AND_COMMAND;
-		else if(!strcmp(current->data, ";"))
-				type = SEQUENCE_COMMAND;
-		else if(!strcmp(current->data, "||"))
-				type = OR_COMMAND;
-		else if(!strcmp(current->data, "|"))
-				type = PIPE_COMMAND;
+	if ((*current)->isWord == 0){
+		// detect I/O
+		if (!strcmp((*current)->data, "(")) { // subshell
+			command_t subshell;
+			*current = (*current)->next;
+			subshell = make_tree(current);
+			first = build_command(SUBSHELL_COMMAND, subshell, NULL);
+			*current = (*current)->next;
+			if (*current == NULL)
+				return first;
+		}
 
-		current = current->ptr;
-	    second = make_tree(current, head);
+		if (!strcmp((*current)->data, ">")) // output
+		{
+			*current = (*current)->next;
+			output = (*current)->data;
+			first->output = output;
+			*current = (*current)->next; // NULL
+			return first;
+		}
+		
+		if (!strcmp((*current)->data, "&&"))
+			type = AND_COMMAND;
+		else if(!strcmp((*current)->data, ";"))
+			type = SEQUENCE_COMMAND;
+		else if(!strcmp((*current)->data, "||"))
+			type = OR_COMMAND;
+		else if(!strcmp((*current)->data, "|"))
+			type = PIPE_COMMAND;
+
+		*current = (*current)->next;
+	    second = make_tree(current);
 	}
 	
 
-	return build_command(type, first, second);
+	return left_associative(type, first, second);
+	//return build_command(type, first, second);
 	
 }
 
@@ -204,21 +241,20 @@ command_stream_t make_command_stream(int(*get_next_byte)(void *),
 	/*
 	while (current!= NULL) {
 		printf("%s \n", current->data);
-		current = current->ptr;
+		current = current->next;
 	}
 
 	//delete token stream
 	current = head;
 	while (current != NULL) {
-		head = current->ptr;
+		head = current->next;
 		free(current);
 		current = head;
 	}*/
 
 	// construct the tree
-	command_t complete_command = make_tree(current, head);
+	command_t complete_command = make_tree(&current);
 	command_stream_t command_node = checked_malloc(sizeof(command_stream_t));
-	//command_stream_t *head_node = checked_malloc(sizeof(command_stream_t *));
 
 	command_node->next = NULL;
 	command_node->previous = NULL;
@@ -235,10 +271,10 @@ void expect(char expectChar, char currentChar, int* i, int* commandLen) {
 	}
 }
 
-command_t read_command_stream(command_stream_t s) {
-	while (s != NULL) {
-		command_stream_t current_stream = s;
-		s = s->next;
+command_t read_command_stream(command_stream_t *s) {
+	while (*s != NULL) {
+		command_stream_t current_stream = *s;
+		*s = (*s)->next;
 
 		// free the previous node
 		if (current_stream->previous != NULL) {
@@ -249,11 +285,6 @@ command_t read_command_stream(command_stream_t s) {
 		return current_stream->current_command;
 	}
 
-	// free the last node
-	if (s->previous != NULL) {
-		free(s->previous->current_command);
-		free(s->previous);
-	}
 	return NULL;
 }
 

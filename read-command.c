@@ -99,7 +99,7 @@ command_t build_command(enum command_type type, command_t a, command_t b) {
 
 command_t left_associative(enum command_type type, command_t a, command_t b) {
 	// in a sub shell command, the second argument 'b' is always set to NULL
-	if (b == NULL || b->type == SUBSHELL_COMMAND || b->type == SIMPLE_COMMAND)
+	if (type == SEQUENCE_COMMAND || type == PIPE_COMMAND || b == NULL || b->type == SUBSHELL_COMMAND || b->type == SIMPLE_COMMAND)
 		return build_command(type, a, b);
 	else {
 		return build_command(b->type, left_associative(type, a, b->u.command[0]), b->u.command[1]);

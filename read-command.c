@@ -56,6 +56,8 @@ struct token {
 	int isWord; // 1 if it's a word, 0 otherwise
 };
 
+typedef struct token *token_t;
+
 void create_token(char *token, struct token **head, struct token **current, int isWord) {
 	struct token *new1 = (struct token*) checked_malloc(sizeof(struct token));
 	new1->data = (char*) (checked_malloc(sizeof(char) * strlen(token)));
@@ -69,16 +71,28 @@ void create_token(char *token, struct token **head, struct token **current, int 
 	*current = new1;
 }
 
-command_t build_single_command(struct token **current) {
+command_t build_single_command(token_t *current) {
 	command_t command = checked_malloc(sizeof(struct command));
 	command->type = SIMPLE_COMMAND;
-	command->status = -1;
+	command->status =-1;
+	command->input = 0;
+	command->output = 0;
 	char** w = checked_malloc(sizeof(char*) + 1);
 	w[0] = (*current)->data;
 	w[1] = NULL;
 	command->u.command[0] = NULL;
 	command->u.command[1] = NULL;
 	command->u.word = w;
+	return command;
+}
+
+command_t build_sub_shell(command_t *subshell) {
+	command_t command = checked_malloc(sizeof(struct command));
+	command->type = SUBSHELL_COMMAND;
+	command->status = -1;
+	command->input = 0;
+	command->output = 0;
+	command->u.subshell_command = *subshell;
 	return command;
 }
 
@@ -106,70 +120,113 @@ command_t left_associative(enum command_type type, command_t a, command_t b) {
 	}
 }
 
+// expect a specific token
+// return 0 if not found
+int expect(int isWord, char* token, token_t *current) {
+	if (isWord)
+		return ((*current)->isWord);
+	else
+		return (!strcmp(token, (*current)->data));
+}
 
-command_t make_tree(struct token **current) {
-	command_t first;
-	char *input = NULL;
-	char *output = NULL;
-	
-	if ((*current)->isWord) {
-		// detect I/O
-		if ((*current)->next != NULL && !strcmp((*current)->next->data, "<")) { // input
-			input = (*current)->data;
-			*current = (*current)->next->next; // skip 2 tokens [input] [>]
-			first = make_tree(current);
-			first->input = input;
-		} else {
-			first = build_single_command(current);
+// used to output error
+void outputError(int *onLine){
+	error(1, 0, "error in line %d\n", *onLine);
+}
+
+// read IO
+void readIO(command_t *command, token_t *current, int *currentLine) {
+	// input
+	if (!strcmp("<", (*current)->data)) {;
+		*current = (*current)->next;
+		if (expect(1, NULL, current)) {
+			(*command)->input = (*current)->data;
 			*current = (*current)->next;
-		}
-		
-		if (*current == NULL || !strcmp((*current)->data, ")")) {
-			return first;
-		}
+		} else
+			outputError(currentLine);
+	}
+
+	// output
+	if (!strcmp(">", (*current)->data)) {
+		*current = (*current)->next;
+		if (expect(1, NULL, current)) {
+			(*command)->output = (*current)->data;
+			*current = (*current)->next;
+		} else
+			outputError(currentLine);
+	}
+}
+
+command_t make_tree(token_t *current, int *currentLine) {
+	command_t first;
+
+	// ignore newlines before a word or a subshell command
+	while(*current != NULL && !strcmp((*current)->data, "\n")) {
+		*current = (*current)->next;
+		++(*currentLine);
+	}
+
+	if (*current == NULL)
+		return NULL;
+
+	if(expect(1, NULL, current)) { // expect a word
+		first = build_single_command(current);
+		*current = (*current)->next;
+	} else if (expect(0, "(", current)) { // or a subshell command
+		*current = (*current)->next;
+		command_t subshell;
+		subshell = make_tree(current, currentLine);
+
+		if (subshell == NULL)
+			outputError(currentLine);
+
+		first = build_sub_shell(&subshell);
+		if (!expect(0, ")", current))
+			outputError(currentLine);
+		else
+			*current = (*current)->next;
+	} else // error
+		outputError(currentLine);
+
+	// read IO
+	if (*current != NULL)
+		readIO(&first, current, currentLine);
+
+	if (*current == NULL || !strcmp(")", (*current)->data))
+		return first;
+
+	if (!strcmp("\n", (*current)->data)) {
+		*current = (*current)->next;
+		++(*currentLine);
+		return first;
 	}
 
 	command_t second = checked_malloc(sizeof(struct command));
 	enum command_type type;
-
-	if ((*current)->isWord == 0){
-		// detect I/O
-		if (!strcmp((*current)->data, "(")) { // subshell
-			command_t subshell;
-			*current = (*current)->next;
-			subshell = make_tree(current);
-			first = build_command(SUBSHELL_COMMAND, subshell, NULL);
-			*current = (*current)->next;
-			if (*current == NULL)
-				return first;
-		}
-
-		if (!strcmp((*current)->data, ">")) // output
-		{
-			*current = (*current)->next;
-			output = (*current)->data;
-			first->output = output;
-			*current = (*current)->next; // NULL
-			return first;
-		}
 		
-		if (!strcmp((*current)->data, "&&"))
-			type = AND_COMMAND;
-		else if(!strcmp((*current)->data, ";"))
-			type = SEQUENCE_COMMAND;
-		else if(!strcmp((*current)->data, "||"))
-			type = OR_COMMAND;
-		else if(!strcmp((*current)->data, "|"))
-			type = PIPE_COMMAND;
+	if (!strcmp("&&", (*current)->data))
+		type = AND_COMMAND;
+	else if(!strcmp(";", (*current)->data))
+		type = SEQUENCE_COMMAND;
+	else if(!strcmp("||", (*current)->data))
+		type = OR_COMMAND;
+	else if(!strcmp("|", (*current)->data))
+		type = PIPE_COMMAND;
+	else
+		outputError(currentLine);
 
-		*current = (*current)->next;
-	    second = make_tree(current);
-	}
-	
+	*current = (*current)->next;
+	second = make_tree(current, currentLine);
 
 	return left_associative(type, first, second);
 	//return build_command(type, first, second);
 	
+}
+
+// insert a node to the end
+void insertEnd(command_stream_t *current, command_stream_t *what) {
+	(*current)->next = *what;
+	*current = (*current)->next;
 }
 
 command_stream_t make_command_stream(int(*get_next_byte)(void *),
@@ -227,12 +284,16 @@ command_stream_t make_command_stream(int(*get_next_byte)(void *),
 				} else {
 					error(1, 0, "error in line%d\n", line);
 				}
+				break;
+
 			case '\n':
 				create_token("\n\0", &head, &current, 0);
 				pop(get_next_byte, get_next_byte_argument, &n);
 				break;
+
 			default:
 				error(1, 0, "error in line %d\n", line);
+				break;
 			}
 		skipST(get_next_byte, get_next_byte_argument, &n);
 	}
@@ -253,22 +314,33 @@ command_stream_t make_command_stream(int(*get_next_byte)(void *),
 	}*/
 
 	// construct the tree
-	command_t complete_command = make_tree(&current);
-	command_stream_t command_node = checked_malloc(sizeof(command_stream_t));
+	int currentLine = 1;
+	command_stream_t tree_head = NULL, tree_current = NULL;
 
-	command_node->next = NULL;
-	command_node->previous = NULL;
-	command_node->current_command = complete_command;
-	//head_node = &command_node;
+	while (current != NULL) {
+		command_t complete_command = make_tree(&current, &currentLine);
 
-	return command_node;
-}
+		if (complete_command == NULL)
+			break;
 
-void expect(char expectChar, char currentChar, int* i, int* commandLen) {
-	if (i == commandLen || currentChar != expectChar) {
-		fprintf(stderr, "Line %d: syntax error", 0);
-		exit(1);
+		// new node
+		command_stream_t command_node = checked_malloc(sizeof(struct command_stream));
+
+		command_node->next = NULL;
+		command_node->previous = NULL;
+		command_node->current_command = complete_command;
+
+		if (tree_head == NULL) { // first node
+			tree_head = tree_current = command_node;
+		} else {
+			tree_current->next = command_node;
+			command_node->previous = tree_current;
+			tree_current = tree_current->next;
+		}
+
 	}
+
+	return tree_head;
 }
 
 command_t read_command_stream(command_stream_t *s) {

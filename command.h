@@ -7,7 +7,7 @@ typedef struct command_stream *command_stream_t;
    the command stream will invoke GETBYTE (ARG) to get the next byte.
    GETBYTE will return the next input byte, or a negative number
    (setting errno) on failure.  */
-command_stream_t make_command_stream (int (*getbyte) (void *), void *arg);
+command_stream_t make_command_stream (int (*getbyte) (void *), void *arg, int *total_command);
 
 /* Read a command from STREAM; return it, or NULL on EOF.  If there is
    an error, report the error and exit instead of returning.  */
@@ -23,7 +23,7 @@ void execute_command (command_t);
 /* Execute commands in timetravel mode
  * @return last command
  */
-command_t execute_timetravel (command_t);
+command_t execute_timetravel (command_stream_t  c, int total_commands);
 
 /* Return the exit status of a command, which must have previously been executed.
    Wait for the command, if it is not already finished.  */

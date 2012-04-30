@@ -1,0 +1,10 @@
+Exception: STATUS_ACCESS_VIOLATION at eip=00401111
+eax=00000000 ebx=00000000 ecx=00000000 edx=6118A400 esi=6127BC4C edi=00000000
+ebp=0028AC68 esp=0028AC40 program=D:\dropbox\classes\cs111\lab1\test\test.exe, pid 7964, thread main
+cs=0023 ds=002B es=002B fs=0053 gs=002B ss=002B
+Stack trace:
+Frame     Function  Args
+0028AC68  00401111  (00000001, 0028AC90, 20010100, 6127D606)
+0028ACF8  610070D8  (00000000, 0028CD78, 610066D0, 00000000)
+00402020  610050DD  (00000000, 00000000, 00000000, 00000000)
+      0 [main] test 7964 exception::handle: Error while dumping state (probably corrupted stack)

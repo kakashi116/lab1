@@ -50,14 +50,16 @@ main (int argc, char **argv)
   if (! script_stream)
     error (1, errno, "%s: cannot open", script_name);
 
+  int total_commands = 0;
+
   command_stream_t command_stream =
-    make_command_stream (get_next_byte, script_stream);
+    make_command_stream (get_next_byte, script_stream, &total_commands);
 
   command_t last_command = NULL;
   command_t command;
 
   if (time_travel)
-	  last_command = execute_timetravel(command);
+	  last_command = execute_timetravel(command_stream, total_commands);
   else {
 	  while ( (command = read_command_stream (&command_stream)) )
 	  {

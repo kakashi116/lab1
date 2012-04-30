@@ -242,7 +242,7 @@ command_t make_tree(token_t *current, int *currentLine) {
 }
 
 command_stream_t make_command_stream(int(*get_next_byte)(void *),
-		void *get_next_byte_argument) {
+		void *get_next_byte_argument, int *total_commands) {
 	/* FIXME: Replace this with your implementation.  You may need to
 	 add auxiliary functions and otherwise modify the source code.
 	 You can also use external functions defined in the GNU C Library.  */
@@ -347,6 +347,8 @@ command_stream_t make_command_stream(int(*get_next_byte)(void *),
 		command_node->next = NULL;
 		command_node->previous = NULL;
 		command_node->current_command = complete_command;
+
+		++(*total_commands);
 
 		if (tree_head == NULL) { // first node
 			tree_head = tree_current = command_node;

@@ -6,6 +6,7 @@
 #include "sys/wait.h"
 #include "stdio.h"
 #include <string.h>
+#include "alloc.h"
 #include <error.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -206,12 +207,123 @@ execute_command (command_t c)
 	}
 }
 
+// extract the output
+void extractIO(int output_only, command_t command, char*** command_o, int *command_o_size) {
+	if (command->type == SIMPLE_COMMAND || command->type == SUBSHELL_COMMAND) {
+		if (!output_only) { // include input
+			if (command->input) {
+				++(*command_o_size);
+				*command_o = checked_realloc(*command_o, sizeof(char*) * (*command_o_size));
+				(*command_o)[*command_o_size - 1] = command->input;
+			}
+		}
+
+		if (command->output) {
+			++(*command_o_size);
+			*command_o = checked_realloc(*command_o, sizeof(char*) * (*command_o_size + 1));
+			(*command_o)[*command_o_size - 1] = command->output;
+		}
+	} else {
+		extractIO(output_only, command->u.command[0], command_o, command_o_size);
+		extractIO(output_only, command->u.command[1], command_o, command_o_size);
+	}
+}
+
+/*
+ * Checks to see if any element in current_o is in traveler_o
+ */
+int depend(char **traveler_o, char **current_o) {
+	int i = 0;
+
+	if (traveler_o == NULL || current_o == NULL)
+		return 0;
+
+	while (current_o[i] != NULL) {
+		int j = 0;
+		while (traveler_o[j] != NULL) {
+			if (!strcmp(current_o[i], traveler_o[j])) {
+				return 1;
+			}
+			++j;
+		}
+		++i;
+	}
+
+	return 0;
+}
+
 /*
  * Use dependency graph to execute commands in parallel
  * @return command_t last command
  */
-command_t execute_timetravel(command_t c)
+command_t execute_timetravel(command_stream_t c, int total_commands)
 {
-	// construct a 2D array to
+	if (!total_commands)
+		return NULL;
 
+	// construct a 2D array to
+	int command_array[total_commands][total_commands];
+	memset(command_array, 0, sizeof(command_array[0][0]) * total_commands * total_commands);
+
+	int work_array[total_commands];
+	memset(work_array, 0, sizeof(work_array[0]) * total_commands);
+
+	// determine dependency
+	/*
+	 * head points to the head of the tree
+	 * current points to the current command which is being examinated
+	 * traveler runs from head to current
+	 */
+	command_stream_t head, current, traveler;
+	head = current = traveler = c;
+	int current_index = 0;
+	int traveler_index = 0;
+
+	// fill out the array to mark dependency
+	while (current != NULL) {
+		while (traveler != current)
+		{
+			char** current_o = checked_malloc(sizeof(char*));
+			char** traveler_o = checked_malloc(sizeof(char*));
+			int current_o_size = 0;
+			int traveler_o_size = 0;
+			extractIO(1, traveler->current_command, &traveler_o, &traveler_o_size);
+			extractIO(0, current->current_command, &current_o, &current_o_size);
+			if (depend(traveler_o, current_o)) {
+				command_array[current_index][traveler_index] = 1;
+				++work_array[current_index];
+			}
+			traveler = traveler->next;
+		}
+		current = current->next;
+		++current_index;
+		traveler_index = 0;
+		traveler = head;
+	}
+
+	//
+
+	return NULL;
+}
+
+void print2(int matrix[2])
+{
+	int i;
+	for (i = 0; i < 2; ++i) {
+		printf("%d ", matrix[i]);
+		printf("\n");
+	}
+}
+
+// print 2d array
+// this is used for debugging only
+void print(int matrix[2][2])
+{
+    int i, j;
+    for (i = 0; i < 2; ++i)
+    {
+        for (j = 0; j < 2; ++j)
+            printf("%d ", matrix[i][j]);
+        printf("\n");
+    }
 }

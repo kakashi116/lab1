@@ -1,0 +1,1 @@
+echo yes > yes; echo no | cat < yes

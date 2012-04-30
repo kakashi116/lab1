@@ -77,9 +77,22 @@ command_t build_single_command(token_t *current) {
 	command->status =-1;
 	command->input = 0;
 	command->output = 0;
-	char** w = checked_malloc(sizeof(char*) + 1);
+	int i = 1;
+	char** w = checked_malloc(sizeof(char*) * 2);
 	w[0] = (*current)->data;
-	w[1] = NULL;
+
+	// check to see if the next token is a word
+	*current = (*current)->next;
+
+	while (*current != NULL && (*current)->isWord) {
+		w = checked_realloc(w, sizeof(char*) * (i + 2));
+		w[i] = (*current)->data;
+		++i;
+		*current = (*current)->next;
+	}
+
+	w[i] = NULL;
+
 	command->u.command[0] = NULL;
 	command->u.command[1] = NULL;
 	command->u.word = w;
@@ -123,6 +136,9 @@ command_t left_associative(enum command_type type, command_t a, command_t b) {
 // expect a specific token
 // return 0 if not found
 int expect(int isWord, char* token, token_t *current) {
+	if (*current == NULL)
+		return 0;
+
 	if (isWord)
 		return ((*current)->isWord);
 	else
@@ -147,7 +163,7 @@ void readIO(command_t *command, token_t *current, int *currentLine) {
 	}
 
 	// output
-	if (!strcmp(">", (*current)->data)) {
+	if (*current != NULL && !strcmp(">", (*current)->data)) {
 		*current = (*current)->next;
 		if (expect(1, NULL, current)) {
 			(*command)->output = (*current)->data;
@@ -171,7 +187,6 @@ command_t make_tree(token_t *current, int *currentLine) {
 
 	if(expect(1, NULL, current)) { // expect a word
 		first = build_single_command(current);
-		*current = (*current)->next;
 	} else if (expect(0, "(", current)) { // or a subshell command
 		*current = (*current)->next;
 		command_t subshell;
@@ -218,15 +233,12 @@ command_t make_tree(token_t *current, int *currentLine) {
 	*current = (*current)->next;
 	second = make_tree(current, currentLine);
 
+	if (second == NULL)
+		outputError(currentLine);
+
 	return left_associative(type, first, second);
 	//return build_command(type, first, second);
 	
-}
-
-// insert a node to the end
-void insertEnd(command_stream_t *current, command_stream_t *what) {
-	(*current)->next = *what;
-	*current = (*current)->next;
 }
 
 command_stream_t make_command_stream(int(*get_next_byte)(void *),
@@ -247,6 +259,12 @@ command_stream_t make_command_stream(int(*get_next_byte)(void *),
 			free(temp);
 		} else
 			switch (n) {
+			case '#': // comment
+				// ignore this line
+				while (n != '\n' && n != EOF)
+					pop(get_next_byte, get_next_byte_argument, &n);
+			break;
+
 			case '(':
 				create_token("(\0", &head, &current, 0);
 				pop(get_next_byte, get_next_byte_argument, &n);
@@ -282,7 +300,7 @@ command_stream_t make_command_stream(int(*get_next_byte)(void *),
 					pop(get_next_byte, get_next_byte_argument, &n);
 					break;
 				} else {
-					error(1, 0, "error in line%d\n", line);
+					error(1, 0, "error in line %d\n", line);
 				}
 				break;
 

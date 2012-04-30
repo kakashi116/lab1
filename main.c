@@ -56,20 +56,22 @@ main (int argc, char **argv)
   command_t last_command = NULL;
   command_t command;
 
-  /* TODO: how to modify command_stream? */
-  /* Force to run once for testing at this time */
-  while ( (command = read_command_stream (&command_stream)) )
-  {
-    if (print_tree)
-	{
-	  printf ("# %d\n", command_number++);
-	  print_command (command);
-	}
-      else
-	{
-	  last_command = command;
-	  execute_command (command, time_travel);
-	}
+  if (time_travel)
+	  last_command = execute_timetravel(command);
+  else {
+	  while ( (command = read_command_stream (&command_stream)) )
+	  {
+		if (print_tree)
+		{
+		  printf ("# %d\n", command_number++);
+		  print_command (command);
+		}
+		  else
+		{
+		  last_command = command;
+		  execute_command (command);
+		}
+	  }
   }
 
   return print_tree || !last_command ? 0 : command_status (last_command);

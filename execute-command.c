@@ -1,10 +1,8 @@
 // UCLA CS 111 Lab 1 command execution
 
-#include "command.h"
-#include "command-internals.h"
-#include "sys/types.h"
-#include "sys/wait.h"
-#include "stdio.h"
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <stdio.h>
 #include <string.h>
 #include "alloc.h"
 #include <error.h>
@@ -13,6 +11,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include "command.h"
+#include "command-internals.h"
 
 int
 command_status (command_t c)
@@ -253,20 +253,55 @@ int depend(char **traveler_o, char **current_o) {
 }
 
 /*
+ * Determine how many children the parent should fork
+ */
+int get_babies(command_stream_t c, int *work_array, int total_commands) {
+	int i;
+	int total_babies;
+	for (i = 0, total_babies = 0; i < total_commands; ++i, c = c->next) {
+		if (work_array[i] == 0 && c->current_command->status == -1)
+			++total_babies;
+	}
+
+	return total_babies;
+}
+
+/*
+ * update the command array and work array
+ */
+void update_array(int command_id, int total_commands, int **command_array, int *work_array) {
+	int i;
+	for (i = 0; i < total_commands; ++i) {
+		if (command_array[i][command_id]) {
+			command_array[i][command_id] = 0;
+			--work_array[i];
+		}
+	}
+}
+
+/*
  * Use dependency graph to execute commands in parallel
  * @return command_t last command
  */
 command_t execute_timetravel(command_stream_t c, int total_commands)
 {
+	
 	if (!total_commands)
 		return NULL;
 
 	// construct a 2D array to
-	int command_array[total_commands][total_commands];
-	memset(command_array, 0, sizeof(command_array[0][0]) * total_commands * total_commands);
+	int **command_array = checked_malloc(total_commands * sizeof(int *));
+	int tmp;
+	for (tmp = 0; tmp < total_commands; ++tmp) {
+		command_array[tmp] = checked_malloc(total_commands * sizeof(int));
+	}
 
-	int work_array[total_commands];
-	memset(work_array, 0, sizeof(work_array[0]) * total_commands);
+	// fill with 0
+	for (tmp = 0; tmp < total_commands; ++tmp)
+		memset(command_array[tmp], 0, sizeof(int) * total_commands);
+
+	int *work_array = checked_malloc(total_commands * sizeof (int));
+	memset(work_array, 0, sizeof(int) * total_commands);
 
 	// determine dependency
 	/*
@@ -301,11 +336,60 @@ command_t execute_timetravel(command_stream_t c, int total_commands)
 		traveler = head;
 	}
 
-	//
+	current = head;
+	int command_id = 0;
+	int p_index;
+	int total_babies;
+	
+	while ((total_babies = get_babies(head, work_array, total_commands))) {
+		p_index = 0;
+		pid_t *pid = checked_malloc(sizeof(pid_t) * total_babies);
+		int *status = checked_malloc(sizeof(int) * total_babies);
+		int *map_pid2command  = checked_malloc(sizeof(int) * total_babies); // used to know which commands would be run
+	
+		for (command_id = 0; command_id < total_commands; ++command_id, current = current->next) {
+			if (work_array[command_id] == 0 && current->current_command->status == -1) {
+				
+				// update the map
+				map_pid2command[p_index] = command_id;
+				
+				pid[p_index] = fork();
+				
+				if (pid[p_index] == -1) { // error
+					sysError();
+				} else if (pid[p_index] == 0) { // child
+					execute_command(current->current_command);
+					exit(current->current_command->status);
+				}
+				++p_index;
+			}
+		}
 
-	return NULL;
+		// wait for children
+		for (--p_index; p_index > 0; --p_index) {
+			waitpid(pid[p_index], &status[p_index], 0);
+		}
+		
+		// update the status
+		current = head;
+		for (command_id = 0, p_index = 0; p_index < total_babies; ++p_index) {
+			while (command_id != map_pid2command[p_index]) {
+				++command_id;
+				current = current->next;
+			}
+			current->current_command->status = WIFEXITED(status[p_index]);
+
+			// update the array
+			update_array(command_id, total_commands, command_array, work_array);
+		}
+		
+	}
+
+	// go the last command
+	return current->previous->current_command;
 }
 
+/*
 void print2(int matrix[2])
 {
 	int i;
@@ -327,3 +411,4 @@ void print(int matrix[2][2])
         printf("\n");
     }
 }
+*/
